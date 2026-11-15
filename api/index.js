@@ -53,7 +53,8 @@ const { Store } = require("../lib/store");
 const ROOT = path.join(__dirname, "..");
 const GATEKEEPER_TYPE = "agent-games.proof-gatekeeper.v1";
 
-const HMAC_SECRET = process.env.AGENT_HMAC_SECRET || "";
+const HMAC_SECRET =
+  process.env.AGENT_HMAC_SECRET || process.env.AGENT_GAMES_HMAC_SECRET || "";
 const KURIER_API_KEY = process.env.KURIER_API_KEY || "";
 const PROOF_TIMEOUT_MS = parseInt(process.env.PROOF_TIMEOUT_MS || "45000", 10);
 
@@ -157,6 +158,14 @@ async function handleTask(rawBody, req) {
     task = JSON.parse(rawBody.toString("utf8"));
   } catch (_) {
     return { status: 400, body: { error: "invalid JSON" } };
+  }
+
+  // (2a) Preflight probe (platform save-time check): the platform POSTs a
+  // signed {"type": "agent-games.preflight.v1", ...} and requires a signed
+  // { ok: true, protocolVersion: "v1" } response. Anything else fails the
+  // endpoint save with "The endpoint must return signed protocol-v1 JSON."
+  if (task.type === "agent-games.preflight.v1") {
+    return { status: 200, body: { ok: true, protocolVersion: "v1" } };
   }
 
   // (2) Unknown envelope type: signed ack (preflight/health tolerance).
